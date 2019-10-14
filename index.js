@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const app = express();
 
-const port = process.env.PORT || 8000;
+const port = process.env.PORT || 8000, prefix = '/v1';
 
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -15,26 +15,28 @@ let db = mysql.createConnection({
   password: "root",
   database: "watermelon_database",
   port: "3306",
-  socketPath: "/Applications/MAMP/tmp/mysql/mysql.sock"
+  socketPath: "/Applications/MAMP/tmp/mysql/mysql.sock",
+  timezone: "utc"
 });
 
-app.get('/', function(req, res) {
+app.get(prefix+'/', function(req, res) {
     let response = { "page": "home" };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
 });
 
 /* =============== users =============== */
 
-app.get('/users', function(req, res) {
+app.get(prefix+'/users', function(req, res) {
   db.query("SELECT * FROM users;", function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "users", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.post('/users', function(req, res) {
+app.post(prefix+'/users', function(req, res) {
   let first_name = req.body.first_name;
   let last_name = req.body.last_name;
   let email = req.body.email;
@@ -45,22 +47,25 @@ app.post('/users', function(req, res) {
   let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', '${is_admin}', '${token}')`;
 
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
-    res.send(JSON.stringify("SUCCESS"));
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
+      
+    res.send(JSON.stringify("SUCCESS")).status(200);
   })
 });
 
-app.get('/users/:id', function(req, res) {
+app.get(prefix+'/users/:id', function(req, res) {
   let id = req.params.id;
   let query = `SELECT * FROM users WHERE id=${id}`;
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
-    res.send(JSON.stringify(result));
+    res.send(JSON.stringify(result)).status(200);
   });
 });
 
-app.put('/users/:id', function(req, res) {
+app.put(prefix+'/users/:id', function(req, res) {
   let id = req.params.id;
   let query = `UPDATE users SET`;
   let conditions = [`first_name`, `last_name`, `email`, `password`, `is_admin`];
@@ -78,35 +83,38 @@ app.put('/users/:id', function(req, res) {
   query += ` WHERE id=${id};`;
 
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
-    res.send(JSON.stringify(result));
+    res.send(JSON.stringify(result)).status(200);
   });
 });
 
-app.delete('/users/:id', function(req, res) {
+app.delete(prefix+'/users/:id', function(req, res) {
   let id = req.params.id;
   let username = req.body.username;
   let query = `DELETE FROM users WHERE id=${id}`;
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
-    res.send(JSON.stringify("SUCCESS"));
+    res.send(JSON.stringify("SUCCESS")).status(204);
   });
 });
 
 /* =============== cards =============== */
 
-app.get('/cards', function(req, res) {
+app.get(prefix+'/cards', function(req, res) {
   db.query("SELECT * FROM cards;", function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "cards", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.post('/cards', function(req, res) {
+app.post(prefix+'/cards', function(req, res) {
   let user_id = req.body.user_id;
   let last_4= req.body.last_4;
   let brand = req.body.brand;
@@ -115,12 +123,14 @@ app.post('/cards', function(req, res) {
   let query = `INSERT INTO cards (user_id, last_4, brand, expired_at) VALUES ('${user_id}', '${last_4}', '${brand}', '${expired_at}')`;
 
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
+
     res.send(JSON.stringify("SUCCESS"));
   })
 });
 
-app.put('/cards/:id', function(req, res) {
+app.put(prefix+'/cards/:id', function(req, res) {
   let id = req.params.id;
   let query = "UPDATE cards SET";
   let conditions = ["user_id", "last_4", "brand", "expired_at"];
@@ -138,60 +148,76 @@ app.put('/cards/:id', function(req, res) {
   query += ` WHERE id=${id};`;
 
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
-    res.send(JSON.stringify(result));
+    res.send(JSON.stringify(result)).status(200);
   });
 });
 
-app.delete('/cards/:id', function(req, res) {
+app.delete(prefix+'/cards/:id', function(req, res) {
   let id = req.params.id;
   let username = req.body.username;
   let query = `DELETE FROM cards WHERE id=${id}`;
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
-    res.send(JSON.stringify("SUCCESS"));
+    res.send(JSON.stringify("SUCCESS")).status(204);
   });
 });
 
 /* =============== wallets =============== */
 
-app.get('/wallets', function(req, res) {
-  db.query("SELECT * FROM wallets;", function(err, result, fields) {
-    if(err) throw err;
+app.get(prefix+'/wallets', function(req, res) {
+  db.query("SELECT * FROM wallets", function(err, result, fields) {
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "wallets", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.get('/wallets/:wallet_id', async (req, res, next) => {
+app.get(prefix+'/wallets/:wallet_id', async (req, res, next) => {
   let wallet_id = req.params.wallet_id;
   var balance = 0;
 
   try {
-    balance = await sumPay("payins", wallet_id);
-    balance -= await await sumPay("payouts", wallet_id);
+    balance += await sumPay("payins", wallet_id);
+    balance -= await sumPay("payouts", wallet_id);
+
+    balance += await sumTransfers("credited_wallet_id", wallet_id);
+    balance -= await sumTransfers("debited_wallet_id", wallet_id);
 
     let response = { "wallet_id": parseInt(wallet_id, 10), "balance": balance/100 }; //Number.parseFloat(balance/100).toFixed(2)
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   } catch (e) {
     next(e);
   }
 });
 
-function sumPay(table, wallet_id) {
-  let query = `SELECT * FROM ${table} WHERE wallet_id=${wallet_id}`;
+function sumPay(table_name, wallet_id) {
+  let query = `SELECT amount FROM ${table_name} WHERE wallet_id=${wallet_id}`;
+  return sumAmount(query);
+}
+
+function sumTransfers(column_name, wallet_id) {
+  let query = `SELECT amount FROM transfers WHERE ${column_name}=${wallet_id}`;
+  return sumAmount(query);
+}
+
+function sumAmount(query) {
   let balance = 0;
 
   return new Promise(resolve => {
     db.query(query, function(err, result, fields) {
-      if(err) throw err;
+      if(err)
+        res.send(JSON.stringify(err)).status(500);
 
-      for(let index in result) {
+      for(let index in result)
         balance += result[index].amount;
-      }
+
       resolve(balance);
       });
   });
@@ -199,75 +225,102 @@ function sumPay(table, wallet_id) {
 
 /* =============== payins =============== */
 
-app.get('/payins', function(req, res) {
+app.get(prefix+'/payins', function(req, res) {
   db.query("SELECT * FROM payins", function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "payins", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.get('/payins/:wallet_id', function(req, res) {
+app.get(prefix+'/payins/:wallet_id', function(req, res) {
   let wallet_id = req.params.wallet_id;
   let query = `SELECT * FROM payins WHERE wallet_id=${wallet_id}`;
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "payins", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.post('/payins', function(req, res) {
+app.post(prefix+'/payins', function(req, res) {
   let wallet_id = req.body.wallet_id;
   let amount = req.body.amount * 100;
   let query = `INSERT INTO payins (wallet_id, amount) VALUES ('${wallet_id}', '${amount}')`;
 
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
-    res.send(JSON.stringify("SUCCESS: " + amount/100 + " credited on " + wallet_id));
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
+
+    res.send(JSON.stringify("SUCCESS: " + amount/100 + " credited on " + wallet_id)).status(200);
   })
 });
 
 /* =============== payouts =============== */
 
-app.get('/payouts', function(req, res) {
+app.get(prefix+'/payouts', function(req, res) {
   db.query("SELECT * FROM payouts", function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "payouts", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.get('/payouts/:wallet_id', function(req, res) {
+app.get(prefix+'/payouts/:wallet_id', function(req, res) {
   let wallet_id = req.params.wallet_id;
   let query = `SELECT * FROM payouts WHERE wallet_id=${wallet_id}`;
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
 
     let response = { "page": "payouts", "result": result };
-    res.send(JSON.stringify(response));
+    res.send(JSON.stringify(response)).status(200);
   });
 });
 
-app.post('/payouts', function(req, res) {
+app.post(prefix+'/payouts', function(req, res) {
   let wallet_id = req.body.wallet_id;
   let amount = req.body.amount * 100;
   let query = `INSERT INTO payouts (wallet_id, amount) VALUES ('${wallet_id}', '${amount}')`;
 
   db.query(query, function(err, result, fields) {
-    if(err) throw err;
-    res.send(JSON.stringify("SUCCESS: " + amount/100 + " charged on " + wallet_id));
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
+
+    res.send(JSON.stringify("SUCCESS: " + amount/100 + " charged on " + wallet_id)).status(200);
   })
 });
 
 /* =============== transfers =============== */
 
-app.get('/transfers', function(req, res) {
-  let response = { "page": "transfers" };
-  res.send(JSON.stringify(response));
+app.get(prefix+'/transfers', function(req, res) {
+  db.query("SELECT * FROM transfers", function(err, result, fields) {
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
+
+    let response = { "page": "transfers", "result": result };
+    res.send(JSON.stringify(response)).status(200);
+  });
+});
+
+app.post(prefix+'/transfers', function(req, res) {
+  let debited_wallet_id = req.body.debited_wallet_id;
+  let credited_wallet_id = req.body.credited_wallet_id;
+  let amount = req.body.amount * 100;
+  let query = `INSERT INTO transfers (debited_wallet_id, credited_wallet_id, amount) VALUES ('${debited_wallet_id}', '${credited_wallet_id}', '${amount}')`;
+
+  db.query(query, function(err, result, fields) {
+    if(err)
+      res.send(JSON.stringify(err)).status(500);
+
+    res.send(JSON.stringify("SUCCESS: " + amount/100 + " transfered from " + debited_wallet_id + " to " + credited_wallet_id)).status(200);
+  })
 });
 
 
