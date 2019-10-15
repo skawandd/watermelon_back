@@ -1,7 +1,7 @@
 {
   "name": "watermelon_backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Dylan SKAWAND",
   "main": "index.js",
   "scripts": {
     "start": "nodemon index.js",
