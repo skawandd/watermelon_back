@@ -54,8 +54,8 @@ app.post(prefix+'/users', function(req, res) {
   })
 });
 
-app.get(prefix+'/users/:id', function(req, res) {
-  let id = req.params.id;
+app.get(prefix+'/users/:id', async function(req, res) {
+  let id = await getId(res, "users", req.params.id);
   let query = `SELECT * FROM users WHERE id=${id}`;
   db.query(query, function(err, result, fields) {
     if(err)
@@ -67,8 +67,8 @@ app.get(prefix+'/users/:id', function(req, res) {
   });
 });
 
-app.put(prefix+'/users/:id', function(req, res) {
-  let id = req.params.id;
+app.put(prefix+'/users/:id', async function(req, res) {
+  let id = await getId(res, "users", req.params.id)
   let query = `UPDATE users SET`;
   let conditions = [`first_name`, `last_name`, `email`, `password`, `is_admin`];
 
@@ -92,9 +92,9 @@ app.put(prefix+'/users/:id', function(req, res) {
   });
 });
 
-app.delete(prefix+'/users/:id', function(req, res) {
-  let id = req.params.id;
-  let username = req.body.username;
+app.delete(prefix+'/users/:id', async function(req, res) {
+  let id = await getId(res, "users", req.params.id);
+//  let username = req.body.username;
   let query = `DELETE FROM users WHERE id=${id}`;
   db.query(query, function(err, result, fields) {
     if(err)
@@ -132,8 +132,8 @@ app.post(prefix+'/cards', function(req, res) {
   })
 });
 
-app.put(prefix+'/cards/:id', function(req, res) {
-  let id = req.params.id;
+app.put(prefix+'/cards/:id', async function(req, res) {
+  let id = await getId(res, "cards", req.params.id)
   let query = "UPDATE cards SET";
   let conditions = ["user_id", "last_4", "brand", "expired_at"];
 
@@ -157,8 +157,8 @@ app.put(prefix+'/cards/:id', function(req, res) {
   });
 });
 
-app.delete(prefix+'/cards/:id', function(req, res) {
-  let id = req.params.id;
+app.delete(prefix+'/cards/:id', async function(req, res) {
+  let id = await getId(res, "cards", req.params.id);
   let username = req.body.username;
   let query = `DELETE FROM cards WHERE id=${id}`;
   db.query(query, function(err, result, fields) {
@@ -182,7 +182,7 @@ app.get(prefix+'/wallets', function(req, res) {
 });
 
 app.get(prefix+'/wallets/:wallet_id', async (req, res, next) => {
-  let wallet_id = req.params.wallet_id;
+  let wallet_id = await getId(res, "wallets", req.params.wallet_id)
   var balance = 0;
 
   try {
@@ -214,16 +214,32 @@ function sumAmount(res, query) {
 
   return new Promise(resolve => {
     db.query(query, function(err, result, fields) {
-      if(err) throw err;
-
-    //  else if(result.length == 0)
-    //    res.send(JSON.stringify("ERROR: ressource not found")).status(404);
+      if(err)
+        res.send(JSON.stringify(err)).status(500);
 
       for(let index in result)
         balance += result[index].amount;
 
       resolve(balance);
-      });
+    });
+  });
+}
+
+function getId(res, table_name, id_value) {
+  let query = `SELECT * FROM ${table_name} WHERE id=${id_value}`;
+  return new Promise(resolve => {
+    db.query(query, function(err, result, fields) {
+      if(err)
+        res.send(JSON.stringify(err)).status(500);
+
+      else if(result.length == 0)
+        res.send(JSON.stringify("ERROR: id not found")).status(404);
+
+      else {
+        let id = result[0].id;
+        resolve(id);
+      }
+    });
   });
 }
 
@@ -239,8 +255,8 @@ app.get(prefix+'/payins', function(req, res) {
   });
 });
 
-app.get(prefix+'/payins/:wallet_id', function(req, res) {
-  let wallet_id = req.params.wallet_id;
+app.get(prefix+'/payins/:wallet_id', async function(req, res) {
+  let wallet_id = await getId(res, "payins", req.params.wallet_id);
   let query = `SELECT * FROM payins WHERE wallet_id=${wallet_id}`;
   db.query(query, function(err, result, fields) {
     if(err)
@@ -276,8 +292,8 @@ app.get(prefix+'/payouts', function(req, res) {
   });
 });
 
-app.get(prefix+'/payouts/:wallet_id', function(req, res) {
-  let wallet_id = req.params.wallet_id;
+app.get(prefix+'/payouts/:wallet_id', async function(req, res) {
+  let wallet_id = await getId(res, "payouts", req.params.wallet_id);
   let query = `SELECT * FROM payouts WHERE wallet_id=${wallet_id}`;
   db.query(query, function(err, result, fields) {
     if(err)
