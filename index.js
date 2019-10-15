@@ -49,7 +49,7 @@ app.post(prefix+'/users', function(req, res) {
   db.query(query, function(err, result, fields) {
     if(err)
       res.send(JSON.stringify(err)).status(500);
-      
+
     res.send(JSON.stringify("SUCCESS")).status(200);
   })
 });
@@ -60,6 +60,8 @@ app.get(prefix+'/users/:id', function(req, res) {
   db.query(query, function(err, result, fields) {
     if(err)
       res.send(JSON.stringify(err)).status(500);
+
+
 
     res.send(JSON.stringify(result)).status(200);
   });
@@ -184,11 +186,11 @@ app.get(prefix+'/wallets/:wallet_id', async (req, res, next) => {
   var balance = 0;
 
   try {
-    balance += await sumPay("payins", wallet_id);
-    balance -= await sumPay("payouts", wallet_id);
+    balance += await sumPay(res, "payins", wallet_id);
+    balance -= await sumPay(res, "payouts", wallet_id);
 
-    balance += await sumTransfers("credited_wallet_id", wallet_id);
-    balance -= await sumTransfers("debited_wallet_id", wallet_id);
+    balance += await sumTransfers(res, "credited_wallet_id", wallet_id);
+    balance -= await sumTransfers(res, "debited_wallet_id", wallet_id);
 
     let response = { "wallet_id": parseInt(wallet_id, 10), "balance": balance/100 }; //Number.parseFloat(balance/100).toFixed(2)
     res.send(JSON.stringify(response)).status(200);
@@ -197,23 +199,25 @@ app.get(prefix+'/wallets/:wallet_id', async (req, res, next) => {
   }
 });
 
-function sumPay(table_name, wallet_id) {
-  let query = `SELECT amount FROM ${table_name} WHERE wallet_id=${wallet_id}`;
-  return sumAmount(query);
+function sumPay(res, table_name, wallet_id) {
+  let query = `SELECT * FROM ${table_name} WHERE wallet_id=${wallet_id}`;
+  return sumAmount(res, query);
 }
 
-function sumTransfers(column_name, wallet_id) {
-  let query = `SELECT amount FROM transfers WHERE ${column_name}=${wallet_id}`;
-  return sumAmount(query);
+function sumTransfers(res, column_name, wallet_id) {
+  let query = `SELECT * FROM transfers WHERE ${column_name}=${wallet_id}`;
+  return sumAmount(res, query);
 }
 
-function sumAmount(query) {
+function sumAmount(res, query) {
   let balance = 0;
 
   return new Promise(resolve => {
     db.query(query, function(err, result, fields) {
-      if(err)
-        res.send(JSON.stringify(err)).status(500);
+      if(err) throw err;
+
+    //  else if(result.length == 0)
+    //    res.send(JSON.stringify("ERROR: ressource not found")).status(404);
 
       for(let index in result)
         balance += result[index].amount;
@@ -322,7 +326,6 @@ app.post(prefix+'/transfers', function(req, res) {
     res.send(JSON.stringify("SUCCESS: " + amount/100 + " transfered from " + debited_wallet_id + " to " + credited_wallet_id)).status(200);
   })
 });
-
 
 app.listen(port, function() {
   db.connect(function(err) {
