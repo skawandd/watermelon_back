@@ -61,8 +61,6 @@ app.get(prefix+'/users/:id', async function(req, res) {
     if(err)
       res.send(JSON.stringify(err)).status(500);
 
-
-
     res.send(JSON.stringify(result)).status(200);
   });
 });
@@ -78,7 +76,6 @@ app.put(prefix+'/users/:id', async function(req, res) {
         query += `,`;
 
       query += ` ${conditions[index]} = '${req.query[conditions[index]]}'`;
-
     }
   }
 
@@ -143,7 +140,6 @@ app.put(prefix+'/cards/:id', async function(req, res) {
         query += `,`;
 
       query += ` ${conditions[index]} = '${req.query[conditions[index]]}'`;
-
     }
   }
 
@@ -329,9 +325,9 @@ app.get(prefix+'/transfers', function(req, res) {
   });
 });
 
-app.post(prefix+'/transfers', function(req, res) {
-  let debited_wallet_id = req.body.debited_wallet_id;
-  let credited_wallet_id = req.body.credited_wallet_id;
+app.post(prefix+'/transfers', async function(req, res) {
+  let debited_wallet_id = await getId(res, "wallets", req.body.debited_wallet_id);
+  let credited_wallet_id = await getId(res, "wallets", req.body.credited_wallet_id);
   let amount = req.body.amount * 100;
   let query = `INSERT INTO transfers (debited_wallet_id, credited_wallet_id, amount) VALUES ('${debited_wallet_id}', '${credited_wallet_id}', '${amount}')`;
 
