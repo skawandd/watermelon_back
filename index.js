@@ -339,6 +339,18 @@ app.post(prefix+'/transfers', async function(req, res) {
   })
 });
 
+/* =============== errors =============== */
+
+// 404
+app.use(function(req, res, next) {
+  return res.status(404).send({ message: 'Route'+req.url+' Not found.' });
+});
+
+// 500 
+app.use(function(err, req, res, next) {
+  return res.status(500).send({ error: err });
+});
+
 app.listen(port, function() {
   db.connect(function(err) {
     if(err) throw err;
