@@ -9,14 +9,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/linkev21/watermelon_backend.git"
+    "url": "git+https://github.com/skawandd/watermelon_back.git"
   },
   "author": "Dylan SKAWAND",
   "license": "ISC",
   "bugs": {
-    "url": "https://gitlab.com/linkev21/watermelon_backend/issues"
+    "url": "https://github.com/skawandd/watermelon_back/issues"
   },
-  "homepage": "https://gitlab.com/linkev21/watermelon_backend#readme",
+  "homepage": "https://github.com/skawandd/watermelon_back#readme",
   "devDependencies": {
     "nodemon": "1.19.1"
   },
