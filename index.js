@@ -3,11 +3,13 @@ const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
 const app = express();
 
 const port = process.env.PORT || 8000, prefix = '/v1';
 
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser('secret'));
 
 let db = mysql.createConnection({
   host: "localhost",
@@ -22,6 +24,64 @@ let db = mysql.createConnection({
 app.get(prefix+'/', function(req, res) {
     let response = { "page": "home" };
     res.send(JSON.stringify(response)).status(200);
+});
+
+/* =============== auth =============== */
+
+app.post(prefix+'/login', function(req, res) {
+
+  let email = req.body.email;
+  let password = req.body.password;
+  let query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
+
+  db.query(query, function(err, result, fields) {
+    if(err)
+      res.status(500).send(JSON.stringify(err));
+
+    if(result.length > 0) {
+      let secretKey = fs.readFileSync('secret.key');
+      let token = jwt.sign({ email: email }, secretKey);
+
+      let options = {
+        maxAge: 1000 * 60, // would expire after 1 minute
+        httpOnly: true, // The cookie only accessible by the web server
+        signed: true // Indicates if the cookie should be signed
+    }
+
+    // Set cookie
+      res.cookie('access_token', token, options);
+      res.status(200).send(token);
+    }
+      else
+        res.status(401).send("ACCESS DENIED");
+
+  });
+});
+
+app.use(function(req, res, next) {
+  let token = req.signedCookies.access_token;
+
+  if ("access_token" in req.headers)
+    token = req.headers["access_token"];
+
+  if(token !== undefined) {
+    console.log(token);
+    let secretKey = fs.readFileSync('secret.key')
+    let decoded = jwt.verify(token, secretKey);
+    let query = `SELECT * FROM users WHERE email='${decoded.email}'`;
+
+    db.query(query, function(err, result, fields) {
+      if(err)
+        res.status(500).send(JSON.stringify(err));
+
+      if(result.length > 0)
+        next();
+      else
+        res.status(401).send("ACCESS DENIED");
+    });
+  }
+    else
+      res.status(401).send("ACCESS DENIED");
 });
 
 /* =============== users =============== */
@@ -239,6 +299,24 @@ function getId(res, table_name, id_value) {
   });
 }
 
+function getById(res, table_name, id_value) {
+  let query = `SELECT * FROM ${table_name} WHERE id=${id_value}`;
+  return new Promise(resolve => {
+    db.query(query, function(err, result, fields) {
+      if(err)
+        res.send(JSON.stringify(err)).status(500);
+
+      else if(result.length == 0)
+        res.send(JSON.stringify("ERROR: id not found")).status(404);
+
+      else {
+        resolve(result);
+      }
+    });
+  });
+}
+
+
 /* =============== payins =============== */
 
 app.get(prefix+'/payins', function(req, res) {
@@ -346,7 +424,7 @@ app.use(function(req, res, next) {
   return res.status(404).send({ message: 'Route'+req.url+' Not found.' });
 });
 
-// 500 
+// 500
 app.use(function(err, req, res, next) {
   return res.status(500).send({ error: err });
 });
