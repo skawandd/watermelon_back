@@ -78,7 +78,7 @@ function executeQuery(query) {
         reject(err);
 
       else if(result.length == 0)
-        reject(404);
+        reject(401);
 
       else {
         resolve(result);
@@ -98,6 +98,21 @@ function usersView(result) {
         "last_name" : result[index].last_name,
         "is_admin" : (result[index].is_admin===1),
         "access_token" : result[index].api_key
+    });
+  }
+  return response;
+}
+
+function usersViewV2(result) {
+  let response = [];
+
+  for(let index in result) {
+    response.push({
+        "id" : result[index].id,
+        "email" : result[index].email,
+        "first_name" : result[index].first_name,
+        "last_name" : result[index].last_name,
+        "is_admin" : (result[index].is_admin===1),
     });
   }
   return response;
@@ -188,8 +203,8 @@ app.get(prefix+'/users', function(req, res) {
     if(err)
       res.status(500).send(JSON.stringify(err));
 
-    let response = { "page": "users", "result": result };
-    res.send(JSON.stringify(response)).status(200);
+  //  let response = { "page": "users", "result": result };
+    res.status(200).send(JSON.stringify(response));
   });
 });
 
@@ -200,7 +215,7 @@ app.get(prefix+'/users/:id', async function(req, res) {
     if(err)
       res.status(500).send(JSON.stringify(err));
 
-    res.send(JSON.stringify(result)).status(200);
+    res.status(200).send(JSON.stringify(usersViewV2(result)));
   });
 });
 
