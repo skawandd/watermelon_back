@@ -130,7 +130,7 @@ function makeid(length) {
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
-  let access_token = req.headers["api_key"];
+  let access_token = req.headers["access_token"];
   let email = req.body.email;
   let password = req.body.password;
   let query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
@@ -139,7 +139,12 @@ app.post(prefix+'/login', function(req, res) {
     res.status(400).send("ACCESS DENIED");
   else {
     executeQuery(query).then(
-      result =>  res.status(200).send(JSON.stringify({"access_token": result[0].api_key})),
+      result =>  {
+        let secretKey = fs.readFileSync('secret.key');
+        let token = jwt.sign({ email: email }, secretKey);
+
+        res.status(200).send(JSON.stringify({"access_token": token}))
+      },
       error => {
         console.log("errooooooooor", error);
         res.status(error).send("ACCESS DENIED");
