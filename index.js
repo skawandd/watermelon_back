@@ -46,7 +46,8 @@ app.post(prefix+'/users', function(req,res){
     let first_name = req.body.first_name;
     let password = req.body.password;
     let is_admin = req.body.is_admin;
-    let query = `INSERT INTO users (first_name, last_name, email, password, is_admin) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin})`;
+    let access_token = makeid(64);
+    let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
 
     executeQuery(query).then(
       function(result) {
@@ -77,7 +78,7 @@ function executeQuery(query) {
         reject(err);
 
       else if(result.length == 0)
-        reject(0);
+        reject(404);
 
       else {
         resolve(result);
@@ -101,15 +102,36 @@ function usersView(result) {
   }
   return response;
 }
+
+function makeid(length) {
+   var result           = '';
+   var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+   var charactersLength = characters.length;
+   for ( var i = 0; i < length; i++ ) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+   }
+   return result;
+}
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
-
+  let access_token = req.headers["api_key"];
   let email = req.body.email;
   let password = req.body.password;
   let query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
 
-  db.query(query, function(err, result, fields) {
+  if(email === undefined || password === undefined)
+    res.status(400).send("ACCESS DENIED");
+  else {
+    executeQuery(query).then(
+      result =>  res.status(200).send(JSON.stringify({"access_token": result[0].api_key})),
+      error => {
+        console.log("errooooooooor", error);
+        res.status(error).send("ACCESS DENIED");
+      }
+    );
+  }
+/*  db.query(query, function(err, result, fields) {
     if(err)
       res.status(500).send(JSON.stringify(err));
 
@@ -130,23 +152,10 @@ app.post(prefix+'/login', function(req, res) {
       else
         res.status(401).send("ACCESS DENIED");
 
-  });
+  });*/
 });
 
 app.use(function(req, res, next) {
-
-  if(debug==true){
-    app.use ((req,res,next) => {
-      console.log('V V V\n');
-      next();
-    },function(req, res, next) {
-        console.log('Request URL:'+ req.originalUrl + '\t params : ' + req.params);
-        console.log('Request Type:', req.method);
-        console.log('body:', req.body);
-        next();
-      }
-    );
-  }
   let token = req.signedCookies.access_token;
 
   if ("access_token" in req.headers)
