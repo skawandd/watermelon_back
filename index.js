@@ -51,14 +51,12 @@ app.post(prefix+'/users', function(req,res){
     executeQuery(query).then(
       function(result) {
         executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`).then(
-          result => res.status(200).send(JSON.stringify(usersView(result))),
+          result => res.status(200).send(JSON.stringify(usersView(result)[0])),
           error => console.log(error)
         );
       },
 
-      function(error) {
-
-      }
+      error => console.log(error)
     );
 
 /*    db.query(query,function(err,result,fields){
@@ -97,7 +95,8 @@ function usersView(result) {
         "email" : result[index].email,
         "first_name" : result[index].first_name,
         "last_name" : result[index].last_name,
-        "is_admin" : result[index].is_admin
+        "is_admin" : (result[index].is_admin===1),
+        "access_token" : result[index].api_key
     });
   }
   return response;
