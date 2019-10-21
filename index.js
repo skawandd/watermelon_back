@@ -48,16 +48,60 @@ app.post(prefix+'/users', function(req,res){
     let is_admin = req.body.is_admin;
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin})`;
 
-    db.query(query,function(err,result,fields){
+    executeQuery(query).then(
+      function(result) {
+        executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`).then(
+          result => res.status(200).send(JSON.stringify(usersView(result))),
+          error => console.log(error)
+        );
+      },
+
+      function(error) {
+
+      }
+    );
+
+/*    db.query(query,function(err,result,fields){
       if(err) throw err;
       console.log('le result :',result);
       getById(res,'users', result.insertId)
       .then(
         (user) => { console.log('le user : ', user); }
       )
-    });
+    });*/
 });
 
+function executeQuery(query) {
+  console.log(query);
+  return new Promise(function(resolve, reject) {
+    db.query(query, function(err, result, fields) {
+      if(err)
+        reject(err);
+
+      else if(result.length == 0)
+        reject(0);
+
+      else {
+        resolve(result);
+      }
+    });
+  });
+}
+
+function usersView(result) {
+  let response = [];
+
+  for(let index in result) {
+    response.push({
+        "id" : result[index].id,
+        "email" : result[index].email,
+        "first_name" : result[index].first_name,
+        "last_name" : result[index].last_name,
+        "is_admin" : result[index].is_admin
+    });
+  }
+  return response;
+}
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
