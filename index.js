@@ -182,29 +182,24 @@ function createToken(email) {
 
 app.use(function(req, res, next) {
   let token = req.headers["x-auth-token"];
-  var regex = RegExp('/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/');
-  //token = req.signedCookies.access_token;
 
-  console.log("REGEX: ",regex.test(token));
+    try {
+      let secretKey = fs.readFileSync('secret.key')
+      let decoded = jwt.verify(token, secretKey);
+      let query = `SELECT * FROM users WHERE email='${decoded.email}'`;
 
-  if(regex.test(token)) {
-    console.log(token);
-    let secretKey = fs.readFileSync('secret.key')
-    let decoded = jwt.verify(token, secretKey);
-    let query = `SELECT * FROM users WHERE email='${decoded.email}'`;
+      db.query(query, function(err, result, fields) {
+        if(err)
+          res.status(500).send(JSON.stringify(err));
 
-    db.query(query, function(err, result, fields) {
-      if(err)
-        res.status(500).send(JSON.stringify(err));
-
-      if(result.length > 0)
-        next();
-      else
-        res.status(401).send("ACCESS DENIED");
-    });
-  }
-    else
+        if(result.length > 0)
+          next();
+        else
+          res.status(401).send("ACCESS DENIED");
+      });
+    } catch (e) {
       res.status(401).send("ACCESS DENIED");
+    }
 });
 
 /* =============== users =============== */
@@ -213,7 +208,7 @@ app.get(prefix+'/users', function(req, res) {
   console.log("OK");
   if ("x-auth-token" in req.headers) {
     let access_token = req.headers["x-auth-token"];
-//    console.log("access........... ", access_token);
+    console.log("bite");
     let query = `SELECT * FROM users WHERE api_key='${access_token}'`;
     executeQuery(query).then(
       result =>  {
@@ -224,7 +219,7 @@ app.get(prefix+'/users', function(req, res) {
             error => res.status(401).send("ACCESS DENIED")
           );
         } else
-          res.status(200).send(JSON.stringify(usersViewV2(result)[0]));//TODO));
+          res.status(200).send(JSON.stringify(usersViewV2(result)));//TODO));
       },
       error => res.status(401).send("ACCESS DENIED")
     );
