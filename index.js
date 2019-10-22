@@ -119,6 +119,22 @@ function usersViewV2(result) {
   return response;
 }
 
+function cardsView(result) {
+  let response = [];
+
+  for(let index in result) {
+    console.log(result[index]);
+    response.push({
+        "id" : result[index].id,
+        "user_id" : result[index].user_id,
+        "last_4" : result[index].last_4,
+        "brand" : result[index].brand,
+        "expired_at" : result[index].expired_at
+    });
+  }
+  return response;
+}
+
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
@@ -295,12 +311,15 @@ app.post(prefix+'/cards', function(req, res) {
 
   let query = `INSERT INTO cards (user_id, last_4, brand, expired_at) VALUES ('${user_id}', '${last_4}', '${brand}', '${expired_at}')`;
 
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    res.send(JSON.stringify("SUCCESS"));
-  })
+  executeQuery(query).then(
+    result => {
+      executeQuery(`SELECT id, user_id, last_4, brand, DATE_FORMAT(expired_at, "%Y-%m-%d") AS expired_at FROM cards WHERE id = ${result.insertId}`).then(
+        result => res.status(200).send(JSON.stringify(cardsView(result)[0])),
+        error => res.status(400).send("Bad Request")
+      );
+    },
+    error => res.status(400).send("Bad Request")
+  );
 });
 
 app.put(prefix+'/cards/:id', async function(req, res) {
