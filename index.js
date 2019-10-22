@@ -292,13 +292,32 @@ app.delete(prefix+'/users/:id', async function(req, res) {
 /* =============== cards =============== */
 
 app.get(prefix+'/cards', function(req, res) {
-  db.query("SELECT * FROM cards;", function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+  let access_token = req.headers["x-auth-token"];
+  let query = `SELECT id, user_id, last_4, brand, DATE_FORMAT(expired_at, "%Y-%m-%d") AS expired_at FROM cards`;
 
-    let response = { "page": "cards", "result": result };
-    res.send(JSON.stringify(response)).status(200);
-  });
+  executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
+    result => {
+      console.log("***********************", result);
+      if(result[0].is_admin !== 1)
+        query += ` WHERE user_id = ${result[0].id}`;
+      executeQuery(query).then(
+        result => res.status(200).send(JSON.stringify(cardsView(result))),
+        error => res.status(error).send(JSON.stringify("ACCESS DENIED1"))
+      );
+  },
+  error => res.status(401).send(JSON.stringify("ACCESS DENIED2"))
+  );
+});
+
+app.get(prefix+'/cards/:id', function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let id = req.params.id;
+  let query = `SELECT id, user_id, last_4, brand, DATE_FORMAT(expired_at, "%Y-%m-%d") AS expired_at FROM cards WHERE id = ${id}`;
+
+  executeQuery(query).then(
+    result => res.status(200).send(JSON.stringify(cardsView(result)[0])),
+    error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
+  );
 });
 
 app.post(prefix+'/cards', function(req, res) {
