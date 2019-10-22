@@ -150,7 +150,6 @@ app.post(prefix+'/login', function(req, res) {
         res.status(200).send(JSON.stringify({"access_token": access_token}))
       },
       error => {
-        console.log("merde");
         res.status(401).send("ACCESS DENIED");
       }
     );
@@ -224,7 +223,6 @@ app.get(prefix+'/users', function(req, res) {
   console.log("OK");
   if ("x-auth-token" in req.headers) {
     let access_token = req.headers["x-auth-token"];
-    console.log("bite");
     let query = `SELECT * FROM users WHERE api_key='${access_token}'`;
     executeQuery(query).then(
       result =>  {
