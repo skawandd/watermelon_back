@@ -20,6 +20,7 @@ if(debug==true){
         console.log('Request URL:'+ req.originalUrl + '\t params : ' + req.params);
         console.log('Request Type:', req.method);
         console.log('body:', req.body);
+        console.log('x-auth-token:', req.headers["x-auth-token"])
         next();
       }
     );
@@ -46,7 +47,7 @@ app.post(prefix+'/users', function(req,res){
     let first_name = req.body.first_name;
     let password = req.body.password;
     let is_admin = req.body.is_admin;
-    let access_token = makeid(64);
+    let access_token = createToken(email);
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
 
     executeQuery(query).then(
@@ -78,7 +79,7 @@ function executeQuery(query) {
         reject(err);
 
       else if(result.length == 0)
-        reject(401);
+        reject(404);
 
       else {
         resolve(result);
@@ -118,38 +119,35 @@ function usersViewV2(result) {
   return response;
 }
 
-function makeid(length) {
-   var result           = '';
-   var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-   var charactersLength = characters.length;
-   for ( var i = 0; i < length; i++ ) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
-   }
-   return result;
-}
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
-  let access_token = req.headers["access_token"];
+  let access_token = req.headers["x-auth-token"];
   let email = req.body.email;
   let password = req.body.password;
   let query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
 
-  if(email === undefined || password === undefined)
-    res.status(400).send("ACCESS DENIED");
-  else {
-    executeQuery(query).then(
+  if(access_token !== undefined) {
+//    console.log("FDPPPPPPPP",access_token);
+    executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
       result =>  {
-        let secretKey = fs.readFileSync('secret.key');
-        let token = jwt.sign({ email: email }, secretKey);
-
-        res.status(200).send(JSON.stringify({"access_token": token}))
+        res.status(200).send(JSON.stringify({"access_token": access_token}))
       },
       error => {
-        console.log("errooooooooor", error);
-        res.status(error).send("ACCESS DENIED");
+        console.log("merde");
+        res.status(401).send("ACCESS DENIED");
       }
     );
+  } else if(email !== undefined && password !== undefined) {
+    executeQuery(query).then(
+      result =>  {
+        let token = createToken(email);
+        res.status(200).send(JSON.stringify({"access_token": token}))
+      },
+      error => res.status(401).send("ACCESS DENIED")
+    );
+  } else {
+    res.status(400).send("ACCESS DENIED");
   }
 /*  db.query(query, function(err, result, fields) {
     if(err)
@@ -175,13 +173,21 @@ app.post(prefix+'/login', function(req, res) {
   });*/
 });
 
+function createToken(email) {
+  let secretKey = fs.readFileSync('secret.key');
+  let token = jwt.sign({ email: email }, secretKey);
+
+  return token;
+}
+
 app.use(function(req, res, next) {
-  let token = req.signedCookies.access_token;
+  let token = req.headers["x-auth-token"];
+  var regex = RegExp('/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/');
+  //token = req.signedCookies.access_token;
 
-  if ("access_token" in req.headers)
-    token = req.headers["access_token"];
+  console.log("REGEX: ",regex.test(token));
 
-  if(token !== undefined) {
+  if(regex.test(token)) {
     console.log(token);
     let secretKey = fs.readFileSync('secret.key')
     let decoded = jwt.verify(token, secretKey);
@@ -204,13 +210,27 @@ app.use(function(req, res, next) {
 /* =============== users =============== */
 
 app.get(prefix+'/users', function(req, res) {
-  db.query("SELECT id, first_name, last_name, email, is_admin FROM users;", function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+  console.log("OK");
+  if ("x-auth-token" in req.headers) {
+    let access_token = req.headers["x-auth-token"];
+//    console.log("access........... ", access_token);
+    let query = `SELECT * FROM users WHERE api_key='${access_token}'`;
+    executeQuery(query).then(
+      result =>  {
+        console.log("result",result);
+        if(result[0].is_admin===1) {
+          executeQuery(`SELECT * FROM users`).then(
+            result => res.status(200).send(JSON.stringify(usersViewV2(result))),
+            error => res.status(401).send("ACCESS DENIED")
+          );
+        } else
+          res.status(200).send(JSON.stringify(usersViewV2(result)[0]));//TODO));
+      },
+      error => res.status(401).send("ACCESS DENIED")
+    );
+  } else
+    res.status(401).send(JSON.stringify("ACCESS DENIED"));
 
-  //  let response = { "page": "users", "result": result };
-    res.status(200).send(JSON.stringify(response));
-  });
 });
 
 app.get(prefix+'/users/:id', async function(req, res) {
