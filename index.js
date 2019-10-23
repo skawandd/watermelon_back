@@ -447,10 +447,54 @@ app.delete(prefix+'/cards/:id', async function(req, res) {
 
 /* =============== wallets =============== */
 
-app.get(prefix+'/wallets', function(req, res) {
-  let access_token = req.headers["x-auth-token"];
+function redirectUser(originalUrl) {
+  if(originalUrl.localeCompare(prefix+'/wallets')){
+
+  }
+}
+
+const walletsAdmin = () => {
+  return (req, res, next) => {
+    let access_token = req.headers["x-auth-token"];
+
+    executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
+    .then(
+      result => {
+        if(result[0].is_admin===1)
+          next();
+        else {
+          executeQuery(`SELECT * FROM wallets WHERE user_id = ${result[0].id}`)
+          .then(
+            result => {
+              walletsView(result).then(
+                result => res.status(200).send(JSON.stringify(result)),
+                error => res.status(400).send(JSON.stringify("Bad Request")));
+            },
+            error => res.status(error).send(JSON.stringify("ACCESS DENIED")));
+        }
+      },
+      error => {
+        console.log(error);
+        res.status(500).send(JSON.stringify("Internal Server Error"));
+      });
+  }
+}
+
+app.get(prefix+'/wallets', walletsAdmin(), function(req, res, next) {
+//  let access_token = req.headers["x-auth-token"];
   let query = `SELECT * FROM wallets`;
 
+  executeQuery(query).then(
+    result => {
+      walletsView(result).then(
+        result => res.status(200).send(JSON.stringify(result)),
+        error => res.status(400).send(JSON.stringify("Bad Request"))
+      );
+    },
+    error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
+  );
+
+  /*
   executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
     result => {
       console.log("***********************", result);
@@ -466,7 +510,7 @@ app.get(prefix+'/wallets', function(req, res) {
       );
   },
   error => res.status(400).send(JSON.stringify("Bad Request"))
-  );
+);*/
 });
 
 app.get(prefix+'/wallets', function(req, res) {
