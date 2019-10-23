@@ -148,21 +148,49 @@ function cardsView(result) {
 function walletsView(result) {
   let response = [];
 
-  for(let index in result) {
-    console.log(result[index]);
-    response.push({
-        "id" : result[index].id,
-        "user_id" : result[index].user_id,
-        "last_4" : result[index].last_4,
-        "brand" : result[index].brand,
-        "expired_at" : result[index].expired_at
-    });
-  }
-  return response;
+  return new Promise(async function(resolve) {
+    console.log("RESULT ========== ", result);
+
+    for(let index in result) {
+      let tmp = await getBalance(result[index].id);
+          response.push({
+              "wallet_id" : result[index].id,
+              "balance" : tmp/100
+          });
+    }
+
+    resolve(response);
+  });
 }
 
-function getBalance() {
+function getBalance(wallet_id) {
+  let cpt = 0;
+  let balance = 0;
 
+return new Promise(function(resolve) {
+  try {
+      sumAmount(`SELECT * FROM payins WHERE wallet_id = ${wallet_id}`)
+      .then(result => {
+        balance += result;
+        sumAmount(`SELECT * FROM payouts WHERE wallet_id = ${wallet_id}`)
+        .then(result => {
+          balance -= result;
+          sumAmount(`SELECT * FROM transfers WHERE credited_wallet_id = ${wallet_id}`)
+          .then(result => {
+            balance += result;
+            sumAmount(`SELECT * FROM transfers WHERE debited_wallet_id = ${wallet_id}`)
+            .then(result => {
+              balance -= result;
+        //      console.log(`${wallet_id}. TOTAL: `, balance);
+              resolve(balance);
+            });
+          });
+        });
+      });
+    } catch(e) {
+      reject(e);
+    }
+  });
 }
 
 /* =============== auth =============== */
@@ -425,24 +453,24 @@ app.get(prefix+'/wallets', function(req, res) {
 
   executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
     result => {
-
-    //  console.log("***********************", result);
+      console.log("***********************", result);
       if(result[0].is_admin !== 1)
         query += ` WHERE user_id = ${result[0].id}`;
       executeQuery(query).then(
-        result => res.status(200).send(JSON.stringify(cardsView(result))),
-        error => res.status(error).send(JSON.stringify("ACCESS DENIED1"))
+        result => {
+          walletsView(result).then(
+            result => res.status(200).send(JSON.stringify(result))),
+            error => res.status(400).send(JSON.stringify("Bad Request"))
+        },
+        error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
       );
   },
-  error => res.status(401).send(JSON.stringify("ACCESS DENIED2"))
+  error => res.status(400).send(JSON.stringify("Bad Request"))
   );
 });
 
 app.get(prefix+'/wallets', function(req, res) {
-  let access_token = req.headers["x-auth-token"];
-  let query = ``;
 
-  executeQuery
   db.query("SELECT * FROM wallets", function(err, result, fields) {
     if(err)
       res.status(500).send(JSON.stringify(err));
@@ -480,13 +508,13 @@ function sumTransfers(res, column_name, wallet_id) {
   return sumAmount(res, query);
 }
 
-function sumAmount(res, query) {
+function sumAmount(query) {
   let balance = 0;
 
   return new Promise(resolve => {
     db.query(query, function(err, result, fields) {
       if(err)
-        res.status(500).send(JSON.stringify(err));
+        reject(err);
 
       for(let index in result)
         balance += result[index].amount;
