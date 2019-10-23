@@ -360,7 +360,6 @@ app.put(prefix+'/cards/:id', async function(req, res) {
 
   executeQuery(query).then(
     result => {
-      console
       executeQuery(`SELECT id, user_id, last_4, brand, DATE_FORMAT(expired_at, "%Y-%m-%d") AS expired_at FROM cards WHERE id = ${id}`).then(
         result => res.status(200).send(JSON.stringify(cardsView(result)[0])),
         error => res.status(404).send(JSON.stringify("Note found"))
@@ -373,15 +372,19 @@ app.put(prefix+'/cards/:id', async function(req, res) {
 });
 
 app.delete(prefix+'/cards/:id', async function(req, res) {
-  let id = await getId(res, "cards", req.params.id);
+  let id = req.params.id;
   let username = req.body.username;
   let query = `DELETE FROM cards WHERE id=${id}`;
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
 
-    res.send(JSON.stringify("SUCCESS")).status(204);
-  });
+  executeQuery(query).then(
+    result => {
+      if(result.affectedRows == 0)
+        res.status(404).send(JSON.stringify("Not Found"))
+      else
+        res.status(204).send("No Content")
+    },
+    error => res.status(400).send(JSON.stringify("Bad Request"))
+  );
 });
 
 /* =============== wallets =============== */
@@ -466,7 +469,7 @@ function getById(res, table_name, id_value) {
         res.status(500).send(JSON.stringify(err));
 
       else if(result.length == 0)
-        res.send(JSON.stringify("ERROR: id not found")).status(404);
+        res.send(JSON.stringify("ERROR: Id not found")).status(404);
 
       else {
         resolve(result);
