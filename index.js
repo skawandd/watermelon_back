@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
 const app = express();
-var debug = true;
+var debug = true, cpt = 0;
 
 const port = process.env.PORT || 8000, prefix = '/v1';
 
@@ -17,7 +17,7 @@ if(debug==true){
       console.log('V V V\n');
       next();
     },function(req, res, next) {
-        console.log('Request URL:'+ req.originalUrl + '\t params : ' + req.params);
+        console.log(++cpt + '. Request URL:'+ req.originalUrl + '\t params : ' + req.params);
         console.log('Request Type:', req.method);
         console.log('body:', req.body);
         console.log('x-auth-token:', req.headers["x-auth-token"])
@@ -340,27 +340,36 @@ app.post(prefix+'/cards', function(req, res) {
 });
 
 app.put(prefix+'/cards/:id', async function(req, res) {
-  let id = await getId(res, "cards", req.params.id)
+  let id = req.params.id;
   let query = "UPDATE cards SET";
   let conditions = ["user_id", "last_4", "brand", "expired_at"];
 
+  console.log("QUERY: ", req.body);
+
   for(let index in conditions) {
-    if(conditions[index] in req.query) {
+    if(conditions[index] in req.body) {
       if(query.indexOf("=") > 0)
         query += `,`;
 
-      query += ` ${conditions[index]} = '${req.query[conditions[index]]}'`;
+      if(req.body[conditions[index]] !== undefined)
+        query += ` ${conditions[index]} = '${req.body[conditions[index]]}'`;
     }
   }
 
   query += ` WHERE id=${id};`;
 
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+  executeQuery(query).then(
+    result => {
+      console
+      executeQuery(`SELECT id, user_id, last_4, brand, DATE_FORMAT(expired_at, "%Y-%m-%d") AS expired_at FROM cards WHERE id = ${id}`).then(
+        result => res.status(200).send(JSON.stringify(cardsView(result)[0])),
+        error => res.status(404).send(JSON.stringify("Note found"))
+      );
+    },
+    error => res.status(400).send(JSON.stringify("Bad Request"))
+  );
 
-    res.send(JSON.stringify(result)).status(200);
-  });
+
 });
 
 app.delete(prefix+'/cards/:id', async function(req, res) {
