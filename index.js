@@ -49,11 +49,21 @@ app.post(prefix+'/users', function(req,res){
     let is_admin = req.body.is_admin;
     let access_token = createToken(email);
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
+    let buffer;
 
     executeQuery(query).then(
       function(result) {
         executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`).then(
-          result => res.status(200).send(JSON.stringify(usersView(result)[0])),
+          result => {
+            buffer = usersView(result);
+            console.log("result: ", result);
+            console.log("buffer: ", buffer);
+            console.log("ID___", buffer[0].id);
+            executeQuery(`INSERT INTO wallets (user_id) VALUES (${buffer[0].id})`).then(
+              result => res.status(200).send(JSON.stringify(buffer[0])),
+              error => res.status(400).send(JSON.stringify("Bad Request"))
+            );
+          },
           error => console.log(error)
         );
       },
@@ -133,6 +143,26 @@ function cardsView(result) {
     });
   }
   return response;
+}
+
+function walletsView(result) {
+  let response = [];
+
+  for(let index in result) {
+    console.log(result[index]);
+    response.push({
+        "id" : result[index].id,
+        "user_id" : result[index].user_id,
+        "last_4" : result[index].last_4,
+        "brand" : result[index].brand,
+        "expired_at" : result[index].expired_at
+    });
+  }
+  return response;
+}
+
+function getBalance() {
+
 }
 
 /* =============== auth =============== */
@@ -390,6 +420,29 @@ app.delete(prefix+'/cards/:id', async function(req, res) {
 /* =============== wallets =============== */
 
 app.get(prefix+'/wallets', function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let query = `SELECT * FROM wallets`;
+
+  executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
+    result => {
+
+    //  console.log("***********************", result);
+      if(result[0].is_admin !== 1)
+        query += ` WHERE user_id = ${result[0].id}`;
+      executeQuery(query).then(
+        result => res.status(200).send(JSON.stringify(cardsView(result))),
+        error => res.status(error).send(JSON.stringify("ACCESS DENIED1"))
+      );
+  },
+  error => res.status(401).send(JSON.stringify("ACCESS DENIED2"))
+  );
+});
+
+app.get(prefix+'/wallets', function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let query = ``;
+
+  executeQuery
   db.query("SELECT * FROM wallets", function(err, result, fields) {
     if(err)
       res.status(500).send(JSON.stringify(err));
