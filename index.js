@@ -193,6 +193,19 @@ return new Promise(function(resolve) {
   });
 }
 
+function payView(result) {
+  let response = [];
+
+  for(let index in result) {
+    response.push({
+        "id" : result[index].id,
+        "wallet_id" : result[index].wallet_id,
+        "amount" : result[index].amount/100
+    });
+  }
+  return response;
+}
+
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
@@ -278,27 +291,24 @@ app.use(function(req, res, next) {
 /* =============== users =============== */
 
 app.get(prefix+'/users', function(req, res) {
-  console.log("OK");
-  if ("x-auth-token" in req.headers) {
-    let access_token = req.headers["x-auth-token"];
-    let query = `SELECT * FROM users WHERE api_key='${access_token}'`;
-    executeQuery(query).then(
-      result =>  {
-        console.log("result",result);
-        if(result[0].is_admin===1) {
-          executeQuery(`SELECT * FROM users`).then(
-            result => res.status(200).send(JSON.stringify(usersViewV2(result))),
-            error => res.status(401).send("ACCESS DENIED")
-          );
-        } else
-          res.status(200).send(JSON.stringify(usersViewV2(result)));//TODO));
-      },
-      error => res.status(401).send("ACCESS DENIED")
-    );
-  } else
-    res.status(401).send(JSON.stringify("ACCESS DENIED"));
+  let access_token = req.headers["x-auth-token"];
+  let query = `SELECT * FROM users`;
 
+  executeQuery(query + ` WHERE api_key = '${access_token}'`).then(
+    result => {
+      if(result[0].is_admin !== 1)
+        res.status(200).send(JSON.stringify(usersViewV2(result)));
+      else {
+        executeQuery(query).then(
+          result => res.status(200).send(JSON.stringify(usersViewV2(result))),
+          error => res.status(error).send(JSON.stringify("ACCESS DENIED1"))
+        );
+      }
+  },
+  error => res.status(401).send(JSON.stringify("ACCESS DENIED2"))
+  );
 });
+
 
 app.get(prefix+'/users/:id', async function(req, res) {
   let id = await getId(res, "users", req.params.id);
@@ -355,7 +365,6 @@ app.get(prefix+'/cards', function(req, res) {
 
   executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
     result => {
-      console.log("***********************", result);
       if(result[0].is_admin !== 1)
         query += ` WHERE user_id = ${result[0].id}`;
       executeQuery(query).then(
@@ -606,14 +615,63 @@ function getById(res, table_name, id_value) {
 
 /* =============== payins =============== */
 
-app.get(prefix+'/payins', function(req, res) {
-  db.query("SELECT * FROM payins", function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+const payAdmin = () => {
+  return (req, res, next) => {
+    let access_token = req.headers["x-auth-token"];
+    let table;
 
-    let response = { "page": "payins", "result": result };
-    res.status(200).send(JSON.stringify(result));
-  });
+    if(req.originalUrl.localeCompare(prefix+'/payins') === 0)
+      table = 'payins';
+    else if(req.originalUrl.localeCompare(prefix+'/payouts') === 0)
+      table = 'payouts';
+    else
+      res.status(400).send(JSON.stringify("Bad Request"));
+
+    executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
+    .then(
+      result => {
+        if(result[0].is_admin===1)
+          next();
+        else {
+          executeQuery(`SELECT * FROM wallets WHERE user_id = ${result[0].id}`)
+          .then(
+            result => {
+              executeQuery(`SELECT * FROM ${table} WHERE wallet_id = ${result[0].id}`).then(
+                result => res.status(200).send(JSON.stringify(payView(result))),
+                error => res.status(500).send(JSON.stringify("Internal Server Error")));
+            },
+            error => res.status(500).send(JSON.stringify("Internal Server Error")));
+        }
+      },
+      error => {
+        console.log(error);
+        res.status(500).send(JSON.stringify("Internal Server Error"));
+      });
+  }
+}
+
+app.get(prefix+'/payins', payAdmin(), function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let query = `SELECT * FROM payins`;
+
+  executeQuery(query).then(
+    result => {
+      console.log("RETURN 200: ", result);
+      res.status(200).send(JSON.stringify(payView(result)))
+    },
+    error => res.status(500).send(JSON.stringify("Internal Server Error"))
+  );
+});
+
+app.get(prefix+'/payins/:id', function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let id = req.params.id;
+  let query = `SELECT * FROM payins WHERE id = ${id}`;
+
+  executeQuery(query).then(
+    result => res.status(200).send(JSON.stringify(payView(result)[0])),
+    error => res.status(404).send(JSON.stringify("Not Found"))
+  );
 });
 
 app.get(prefix+'/payins/:wallet_id', async function(req, res) {
@@ -633,36 +691,43 @@ app.post(prefix+'/payins', function(req, res) {
   let amount = req.body.amount * 100;
   let query = `INSERT INTO payins (wallet_id, amount) VALUES ('${wallet_id}', '${amount}')`;
 
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    res.send(JSON.stringify("SUCCESS: " + amount/100 + " credited on " + wallet_id)).status(200);
-  })
+  executeQuery(query)
+  .then(
+    result => {
+      executeQuery(`SELECT * FROM payins WHERE id = ${result.insertId}`)
+      .then(
+        result => res.status(200).send(JSON.stringify(payView(result)[0])),
+        error => res.status(500).send(JSON.stringify("Internal Server Error"))
+      );
+    },
+    error => res.status(400).send(JSON.stringify("Bad Request"))
+  );
 });
 
 /* =============== payouts =============== */
 
-app.get(prefix+'/payouts', function(req, res) {
-  db.query("SELECT * FROM payouts", function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+app.get(prefix+'/payouts', payAdmin(), function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let query = `SELECT * FROM payouts`;
 
-    let response = { "page": "payouts", "result": result };
-    res.send(JSON.stringify(response)).status(200);
-  });
+  executeQuery(query).then(
+    result => {
+      console.log("RETURN 200: ", result);
+      res.status(200).send(JSON.stringify(payView(result)))
+    },
+    error => res.status(500).send(JSON.stringify("Internal Server Error"))
+  );
 });
 
-app.get(prefix+'/payouts/:wallet_id', async function(req, res) {
-  let wallet_id = await getId(res, "payouts", req.params.wallet_id);
-  let query = `SELECT * FROM payouts WHERE wallet_id=${wallet_id}`;
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+app.get(prefix+'/payouts/:id', function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let id = req.params.id;
+  let query = `SELECT * FROM payouts WHERE id = ${id}`;
 
-    let response = { "page": "payouts", "result": result };
-    res.send(JSON.stringify(response)).status(200);
-  });
+  executeQuery(query).then(
+    result => res.status(200).send(JSON.stringify(payView(result)[0])),
+    error => res.status(404).send(JSON.stringify("Not Found"))
+  );
 });
 
 app.post(prefix+'/payouts', function(req, res) {
@@ -670,12 +735,17 @@ app.post(prefix+'/payouts', function(req, res) {
   let amount = req.body.amount * 100;
   let query = `INSERT INTO payouts (wallet_id, amount) VALUES ('${wallet_id}', '${amount}')`;
 
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    res.send(JSON.stringify("SUCCESS: " + amount/100 + " charged on " + wallet_id)).status(200);
-  })
+  executeQuery(query)
+  .then(
+    result => {
+      executeQuery(`SELECT * FROM payouts WHERE id = ${result.insertId}`)
+      .then(
+        result => res.status(200).send(JSON.stringify(payView(result)[0])),
+        error => res.status(500).send(JSON.stringify("Internal Server Error"))
+      );
+    },
+    error => res.status(400).send(JSON.stringify("Bad Request"))
+  );
 });
 
 /* =============== transfers =============== */
