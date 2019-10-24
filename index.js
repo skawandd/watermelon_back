@@ -47,20 +47,21 @@ app.post(prefix+'/users', function(req,res){
     let first_name = req.body.first_name;
     let password = req.body.password;
     let is_admin = req.body.is_admin;
-    let access_token = createToken(email);
+    let access_token = makeid(64);//createToken(email);
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
     let buffer;
 
     executeQuery(query).then(
       function(result) {
         executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`).then(
-          result => {
-            buffer = usersView(result);
-            console.log("result: ", result);
-            console.log("buffer: ", buffer);
-            console.log("ID___", buffer[0].id);
-            executeQuery(`INSERT INTO wallets (user_id) VALUES (${buffer[0].id})`).then(
-              result => res.status(200).send(JSON.stringify(buffer[0])),
+          userInfo => {
+
+            console.log("result: ", userInfo);
+            executeQuery(`INSERT INTO wallets (user_id) VALUES (${userInfo[0].id})`).then(
+              result_wallet => {
+                userInfo[0].api_key = createToken(email);
+                res.status(200).send(JSON.stringify(usersView(userInfo)[0]))
+              },
               error => res.status(400).send(JSON.stringify("Bad Request"))
             );
           },
@@ -81,6 +82,7 @@ app.post(prefix+'/users', function(req,res){
     });*/
 });
 
+
 function executeQuery(query) {
   console.log(query);
   return new Promise(function(resolve, reject) {
@@ -97,6 +99,17 @@ function executeQuery(query) {
     });
   });
 }
+
+function makeid(length) {
+   var result           = '';
+   var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+   var charactersLength = characters.length;
+   for ( var i = 0; i < length; i++ ) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+   }
+   return result;
+}
+
 
 function usersView(result) {
   let response = [];
@@ -266,9 +279,8 @@ function createToken(email) {
   return token;
 }
 
-app.use(function(req, res, next) {
-  let token = req.headers["x-auth-token"];
-
+function decodeJWT(token) {
+  return new Promise(function(resolve) {
     try {
       let secretKey = fs.readFileSync('secret.key')
       let decoded = jwt.verify(token, secretKey);
@@ -276,16 +288,30 @@ app.use(function(req, res, next) {
 
       db.query(query, function(err, result, fields) {
         if(err)
-          res.status(500).send(JSON.stringify(err));
+          reject(500);
 
         if(result.length > 0)
-          next();
+          resolve(result);
         else
-          res.status(401).send("ACCESS DENIED");
+          reject(401);
       });
     } catch (e) {
       res.status(401).send("ACCESS DENIED");
     }
+  });
+}
+
+app.use(function(req, res, next) {
+  let token = req.headers["x-auth-token"];
+
+    decodeJWT(token)
+      .then(
+        result => {
+          req.headers["x-auth-token"] = result[0].api_key;
+          next();
+        },
+        error => res.status(401).send("ACCESS DENIED")
+      );
 });
 
 /* =============== users =============== */
