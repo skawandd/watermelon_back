@@ -43,11 +43,11 @@ app.get(prefix+'/', function(req, res) {
 
 app.post(prefix+'/users', function(req,res){
     let email = req.body.email;
-    let last_name = req.body.last_name;// result.insertId > a mettre avec le retour sql
+    let last_name = req.body.last_name;
     let first_name = req.body.first_name;
     let password = req.body.password;
     let is_admin = req.body.is_admin;
-    let access_token = makeid(64);//createToken(email);
+    let access_token = makeid(64);
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
     let buffer;
 
@@ -60,7 +60,14 @@ app.post(prefix+'/users', function(req,res){
             executeQuery(`INSERT INTO wallets (user_id) VALUES (${userInfo[0].id})`).then(
               result_wallet => {
                 userInfo[0].api_key = createToken(email);
-                res.status(200).send(JSON.stringify(usersView(userInfo)[0]))
+                res.status(200).send(JSON.stringify({
+                    "id" : userInfo[0].id,
+                    "email" : userInfo[0].email,
+                    "first_name" : userInfo[0].first_name,
+                    "last_name" : userInfo[0].last_name,
+                    "is_admin" : (userInfo[0].is_admin===1),
+                    "access_token" : userInfo[0].api_key
+                }));
               },
               error => res.status(400).send(JSON.stringify("Bad Request"))
             );
@@ -68,18 +75,8 @@ app.post(prefix+'/users', function(req,res){
           error => console.log(error)
         );
       },
-
       error => console.log(error)
     );
-
-/*    db.query(query,function(err,result,fields){
-      if(err) throw err;
-      console.log('le result :',result);
-      getById(res,'users', result.insertId)
-      .then(
-        (user) => { console.log('le user : ', user); }
-      )
-    });*/
 });
 
 
@@ -110,24 +107,7 @@ function makeid(length) {
    return result;
 }
 
-
 function usersView(result) {
-  let response = [];
-
-  for(let index in result) {
-    response.push({
-        "id" : result[index].id,
-        "email" : result[index].email,
-        "first_name" : result[index].first_name,
-        "last_name" : result[index].last_name,
-        "is_admin" : (result[index].is_admin===1),
-        "access_token" : result[index].api_key
-    });
-  }
-  return response;
-}
-
-function usersViewV2(result) {
   let response = [];
 
   for(let index in result) {
@@ -168,7 +148,7 @@ function walletsView(result) {
       let tmp = await getBalance(result[index].id);
           response.push({
               "wallet_id" : result[index].id,
-              "balance" : tmp/100
+              "balance" : tmp
           });
     }
 
@@ -194,7 +174,6 @@ return new Promise(function(resolve) {
             sumAmount(`SELECT * FROM transfers WHERE debited_wallet_id = ${wallet_id}`)
             .then(result => {
               balance -= result;
-        //      console.log(`${wallet_id}. TOTAL: `, balance);
               resolve(balance);
             });
           });
@@ -213,7 +192,7 @@ function payView(result) {
     response.push({
         "id" : result[index].id,
         "wallet_id" : result[index].wallet_id,
-        "amount" : result[index].amount/100
+        "amount" : result[index].amount
     });
   }
   return response;
@@ -225,7 +204,8 @@ function transfersView(result) {
   for(let index in result) {
     response.push({
         "id" : result[index].id,
-        "wallet_id": result[index].credited_wallet_id,
+        "debited_wallet_id": result[index].debited_wallet_id,
+        "credited_wallet_id": result[index].credited_wallet_id,
         "amount" : result[index].amount
     });
   }
@@ -241,7 +221,6 @@ app.post(prefix+'/login', function(req, res) {
   let query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
 
   if(access_token !== undefined) {
-//    console.log("FDPPPPPPPP",access_token);
     executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
       result =>  {
         res.status(200).send(JSON.stringify({"access_token": access_token}))
@@ -261,28 +240,6 @@ app.post(prefix+'/login', function(req, res) {
   } else {
     res.status(400).send("ACCESS DENIED");
   }
-/*  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    if(result.length > 0) {
-      let secretKey = fs.readFileSync('secret.key');
-      let token = jwt.sign({ email: email }, secretKey);
-
-      let options = {
-        maxAge: 1000 * 60, // would expire after 1 minute
-        httpOnly: true, // The cookie only accessible by the web server
-        signed: true // Indicates if the cookie should be signed
-    }
-
-    // Set cookie
-      res.cookie('access_token', token, options);
-      res.status(200).send(token);
-    }
-      else
-        res.status(401).send("ACCESS DENIED");
-
-  });*/
 });
 
 function createToken(email) {
@@ -337,10 +294,10 @@ app.get(prefix+'/users', function(req, res) {
   executeQuery(query + ` WHERE api_key = '${access_token}'`).then(
     result => {
       if(result[0].is_admin !== 1)
-        res.status(200).send(JSON.stringify(usersViewV2(result)));
+        res.status(200).send(JSON.stringify(usersView(result)));
       else {
         executeQuery(query).then(
-          result => res.status(200).send(JSON.stringify(usersViewV2(result))),
+          result => res.status(200).send(JSON.stringify(usersView(result))),
           error => res.status(error).send(JSON.stringify("ACCESS DENIED1"))
         );
       }
@@ -357,7 +314,7 @@ app.get(prefix+'/users/:id', async function(req, res) {
     if(err)
       res.status(500).send(JSON.stringify(err));
 
-    res.status(200).send(JSON.stringify(usersViewV2(result)));
+    res.status(200).send(JSON.stringify(usersView(result)));
   });
 });
 
@@ -386,15 +343,18 @@ app.put(prefix+'/users/:id', async function(req, res) {
 });
 
 app.delete(prefix+'/users/:id', async function(req, res) {
-  let id = await getId(res, "users", req.params.id);
-//  let username = req.body.username;
+  let id = req.params.id;
   let query = `DELETE FROM users WHERE id=${id}`;
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
 
-    res.send(JSON.stringify("SUCCESS")).status(204);
-  });
+  executeQuery(query).then(
+    result => {
+      if(result.affectedRows == 0)
+        res.status(404).send(JSON.stringify("Not Found"))
+      else
+        res.status(204).send("No Content")
+    },
+    error => res.status(400).send(JSON.stringify("Bad Request"))
+  );
 });
 
 /* =============== cards =============== */
@@ -530,7 +490,6 @@ const walletsAdmin = () => {
 }
 
 app.get(prefix+'/wallets', walletsAdmin(), function(req, res, next) {
-//  let access_token = req.headers["x-auth-token"];
   let query = `SELECT * FROM wallets`;
 
   executeQuery(query).then(
@@ -542,64 +501,22 @@ app.get(prefix+'/wallets', walletsAdmin(), function(req, res, next) {
     },
     error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
   );
+});
 
-  /*
-  executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
+app.get(prefix+'/wallets/:id', function(req, res, next) {
+  let id = req.params.id;
+  let query = `SELECT * FROM wallets WHERE id = ${id}`;
+  console.log("ID: ",id);
+  executeQuery(query).then(
     result => {
-      console.log("***********************", result);
-      if(result[0].is_admin !== 1)
-        query += ` WHERE user_id = ${result[0].id}`;
-      executeQuery(query).then(
-        result => {
-          walletsView(result).then(
-            result => res.status(200).send(JSON.stringify(result))),
-            error => res.status(400).send(JSON.stringify("Bad Request"))
-        },
-        error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
+      walletsView(result).then(
+        result => res.status(200).send(JSON.stringify(result[0])),
+        error => res.status(400).send(JSON.stringify("Bad Request"))
       );
-  },
-  error => res.status(400).send(JSON.stringify("Bad Request"))
-);*/
+    },
+    error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
+  );
 });
-
-app.get(prefix+'/wallets', function(req, res) {
-
-  db.query("SELECT * FROM wallets", function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    let response = { "page": "wallets", "result": result };
-    res.status(200).send(JSON.stringify(response));
-  });
-});
-
-app.get(prefix+'/wallets/:wallet_id', async (req, res, next) => {
-  let wallet_id = await getId(res, "wallets", req.params.wallet_id)
-  var balance = 0;
-
-  try {
-    balance += await sumPay(res, "payins", wallet_id);
-    balance -= await sumPay(res, "payouts", wallet_id);
-
-    balance += await sumTransfers(res, "credited_wallet_id", wallet_id);
-    balance -= await sumTransfers(res, "debited_wallet_id", wallet_id);
-
-    let response = { "wallet_id": parseInt(wallet_id, 10), "balance": balance/100 }; //Number.parseFloat(balance/100).toFixed(2)
-    res.send(JSON.stringify(response)).status(200);
-  } catch (e) {
-    next(e);
-  }
-});
-
-function sumPay(res, table_name, wallet_id) {
-  let query = `SELECT * FROM ${table_name} WHERE wallet_id=${wallet_id}`;
-  return sumAmount(res, query);
-}
-
-function sumTransfers(res, column_name, wallet_id) {
-  let query = `SELECT * FROM transfers WHERE ${column_name}=${wallet_id}`;
-  return sumAmount(res, query);
-}
 
 function sumAmount(query) {
   let balance = 0;
@@ -634,24 +551,6 @@ function getId(res, table_name, id_value) {
     });
   });
 }
-
-function getById(res, table_name, id_value) {
-  let query = `SELECT * FROM ${table_name} WHERE id=${id_value}`;
-  return new Promise(resolve => {
-    db.query(query, function(err, result, fields) {
-      if(err)
-        res.status(500).send(JSON.stringify(err));
-
-      else if(result.length == 0)
-        res.send(JSON.stringify("ERROR: Id not found")).status(404);
-
-      else {
-        resolve(result);
-      }
-    });
-  });
-}
-
 
 /* =============== payins =============== */
 
@@ -714,21 +613,9 @@ app.get(prefix+'/payins/:id', function(req, res) {
   );
 });
 
-app.get(prefix+'/payins/:wallet_id', async function(req, res) {
-  let wallet_id = await getId(res, "payins", req.params.wallet_id);
-  let query = `SELECT * FROM payins WHERE wallet_id=${wallet_id}`;
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    let response = { "page": "payins", "result": result };
-    res.send(JSON.stringify(response)).status(200);
-  });
-});
-
 app.post(prefix+'/payins', function(req, res) {
   let wallet_id = req.body.wallet_id;
-  let amount = req.body.amount * 100;
+  let amount = req.body.amount;
   let query = `INSERT INTO payins (wallet_id, amount) VALUES ('${wallet_id}', '${amount}')`;
 
   executeQuery(query)
@@ -772,7 +659,7 @@ app.get(prefix+'/payouts/:id', function(req, res) {
 
 app.post(prefix+'/payouts', function(req, res) {
   let wallet_id = req.body.wallet_id;
-  let amount = req.body.amount * 100;
+  let amount = req.body.amount;
   let query = `INSERT INTO payouts (wallet_id, amount) VALUES ('${wallet_id}', '${amount}')`;
 
   executeQuery(query)
@@ -790,39 +677,83 @@ app.post(prefix+'/payouts', function(req, res) {
 
 /* =============== transfers =============== */
 
-app.get(prefix+'/transfers', function(req, res) {
-  db.query("SELECT * FROM transfers", function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+const transfersAdmin = () => {
+  return (req, res, next) => {
+    let access_token = req.headers["x-auth-token"];
 
-    let response = { "page": "transfers", "result": result };
-    res.send(JSON.stringify(response)).status(200);
-  });
+    executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
+    .then(
+      result => {
+        if(result[0].is_admin===1)
+          next();
+        else {
+          executeQuery(`SELECT * FROM wallets WHERE user_id = ${result[0].id}`)
+          .then(
+            result => {
+              executeQuery(`SELECT * FROM transfers WHERE debited_wallet_id = ${result[0].id}`).then(
+                result => res.status(200).send(JSON.stringify(transfersView(result))),
+                error => res.status(500).send(JSON.stringify("Internal Server Error")));
+            },
+            error => res.status(500).send(JSON.stringify("Internal Server Error")));
+        }
+      },
+      error => {
+        console.log(error);
+        res.status(500).send(JSON.stringify("Internal Server Error"));
+      });
+  }
+}
+
+app.get(prefix+'/transfers', transfersAdmin(), function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let query = `SELECT * FROM transfers`;
+
+  executeQuery(query).then(
+    error => res.status(500).send(JSON.stringify("Internal Server Error"))
+  );
+});
+
+app.get(prefix+'/transfers/:id', function(req, res) {
+  let access_token = req.headers["x-auth-token"];
+  let id = req.params.id;
+  let query = `SELECT * FROM transfers WHERE id = ${id}`;
+
+  executeQuery(query).then(
+    result => res.status(200).send(JSON.stringify(transfersView(result)[0])),
+    error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
+  );
 });
 
 app.post(prefix+'/transfers', async function(req, res) {
   let access_token = req.headers["x-auth-token"];
-  let debited_wallet_id = req.body.debited_wallet_id;
   let credited_wallet_id = req.body.credited_wallet_id;
   let amount = req.body.amount;
 
-  if(amount/100 < 1)
+  if(amount/100 < 1 || amount >= 99999999)
     res.status(400).send(JSON.stringify("Bad Request"))
     else {
   executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
     .then(infoUser => {
       executeQuery(`SELECT * FROM wallets WHERE user_id = ${infoUser[0].id}`)
         .then(infoWallets => {
-          executeQuery(`INSERT INTO transfers (debited_wallet_id, credited_wallet_id, amount) VALUES (${infoWallets[0].id}, ${credited_wallet_id}, ${amount})`)
-          .then(
-            result => {
-              executeQuery(`SELECT * FROM transfers WHERE id = ${result.insertId}`)
-              .then(
-                result => res.status(200).send(JSON.stringify(transfersView(result)[0])),
-                error => res.status(500).send(JSON.stringify("Internal Server Error"))
-              );
-            },
-            error => res.status(400).send(JSON.stringify("Bad Request")));
+          if(infoWallets[0].id==credited_wallet_id)
+            res.status(400).send(JSON.stringify("Bad Request"));
+          else {
+            executeQuery(`INSERT INTO transfers (debited_wallet_id, credited_wallet_id, amount) VALUES (${infoWallets[0].id}, ${credited_wallet_id}, ${amount})`)
+            .then(
+              result => {
+                executeQuery(`SELECT * FROM transfers WHERE id = ${result.insertId}`)
+                .then(
+                  result => res.status(200).send(JSON.stringify({
+                      "id" : result[0].id,
+                      "wallet_id": result[0].credited_wallet_id,
+                      "amount" : result[0].amount
+                  })),
+                  error => res.status(500).send(JSON.stringify("Internal Server Error"))
+                );
+              },
+              error => res.status(400).send(JSON.stringify("Bad Request")));
+          }
         },
         error => res.status(500).send(JSON.stringify("Internal Server Error")));
     },
@@ -849,7 +780,6 @@ app.listen(port, function() {
   });
   console.log('Watermelon listening on port ' + port);
 });
-//app.listen(port);
 
 process.on('uncaughtException', function (err) {
     console.log(err);
