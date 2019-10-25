@@ -49,34 +49,43 @@ app.post(prefix+'/users', function(req,res){
     let is_admin = req.body.is_admin;
     let access_token = makeid(64);
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
-    let buffer;
 
-    executeQuery(query).then(
-      function(result) {
-        executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`).then(
-          userInfo => {
+    if(email === undefined || last_name === undefined || first_name === undefined || password === undefined || is_admin === undefined)
+      res.status(400).send(JSON.stringify("Bad Request"));
 
-            console.log("result: ", userInfo);
-            executeQuery(`INSERT INTO wallets (user_id) VALUES (${userInfo[0].id})`).then(
-              result_wallet => {
-                userInfo[0].api_key = createToken(email);
-                res.status(200).send(JSON.stringify({
-                    "id" : userInfo[0].id,
-                    "email" : userInfo[0].email,
-                    "first_name" : userInfo[0].first_name,
-                    "last_name" : userInfo[0].last_name,
-                    "is_admin" : (userInfo[0].is_admin===1),
-                    "access_token" : userInfo[0].api_key
-                }));
-              },
-              error => res.status(400).send(JSON.stringify("Bad Request"))
-            );
-          },
-          error => console.log(error)
-        );
-      },
-      error => console.log(error)
+    else {
+      checkEmail(email).then(
+        result => {
+            executeQuery(query).then(
+            function(result) {
+              executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`).then(
+                userInfo => {
+
+                  console.log("result: ", userInfo);
+                  executeQuery(`INSERT INTO wallets (user_id) VALUES (${userInfo[0].id})`).then(
+                    result_wallet => {
+                      userInfo[0].api_key = createToken(email);
+                      res.status(200).send(JSON.stringify({
+                          "id" : userInfo[0].id,
+                          "email" : userInfo[0].email,
+                          "first_name" : userInfo[0].first_name,
+                          "last_name" : userInfo[0].last_name,
+                          "is_admin" : (userInfo[0].is_admin===1),
+                          "access_token" : userInfo[0].api_key
+                      }));
+                    },
+                    error => res.status(400).send(JSON.stringify("Bad Request"))
+                  );
+                },
+                error => console.log(error)
+              );
+            },
+            error => console.log(error)
+          );
+        },
+        error => res.status(400).send(JSON.stringify("Bad Request"))
     );
+  }
 });
 
 
@@ -95,6 +104,31 @@ function executeQuery(query) {
       }
     });
   });
+}
+
+function checkEmail(email) {
+  return new Promise(function(resolve, reject) {
+
+    if(!checkEmailFormat(email))
+      reject(400);
+
+    else {
+      executeQuery(`SELECT * FROM users WHERE email = '${email}'`)
+      .then(result => reject(email), error => resolve(email));
+    }
+  });
+}
+
+function checkEmailFormat(email) {
+  let regex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/i;
+
+  console.log("EMAIL FORMAT");
+
+  if(email.match(regex) === null){
+    console.log("WRONG?");
+    return false;
+  }
+  return true;
 }
 
 function makeid(length) {
@@ -306,43 +340,82 @@ app.get(prefix+'/users', function(req, res) {
   );
 });
 
+app.get(prefix+'/users/:id', function(req, res) {
+  let id = req.params.id;
+  let query = `SELECT * FROM users WHERE id = ${id}`;
 
-app.get(prefix+'/users/:id', async function(req, res) {
-  let id = await getId(res, "users", req.params.id);
-  let query = `SELECT * FROM users WHERE id=${id}`;
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    res.status(200).send(JSON.stringify(usersView(result)));
-  });
+  executeQuery(query).then(
+    result => res.status(200).send(JSON.stringify(usersView(result)[0])),
+    error => res.status(error).send(JSON.stringify("ACCESS DENIED"))
+  );
 });
 
-app.put(prefix+'/users/:id', async function(req, res) {
-  let id = await getId(res, "users", req.params.id)
+const requireSelf = () => {
+  return (req, res, next) => {
+    let access_token = req.headers["x-auth-token"];
+    let id = req.params.id;
+
+    executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
+      .then(
+        userInfo => {
+          executeQuery(`SELECT * FROM users WHERE id = ${id}`).then(
+            result => {
+              if(userInfo[0].id != id && userInfo[0].is_admin !== 1)
+                res.status(403).send(JSON.stringify("Forbidden"));
+
+              else
+                next();
+            },
+            error =>res.status(404).send(JSON.stringify("Not Found")));
+
+        },
+        error => {
+          console.log("SELF: ", access_token);
+          res.status(401).send(JSON.stringify("Unauthorized"));
+        });
+  }
+}
+
+app.put(prefix+'/users/:id', requireSelf(), function(req, res) {
+  let id = req.params.id;
+  let access_token = req.headers["x-auth-token"];
   let query = `UPDATE users SET`;
   let conditions = [`first_name`, `last_name`, `email`, `password`, `is_admin`];
+  let field = 0;
 
   for(let index in conditions) {
-    if(conditions[index] in req.query) {
+    console.log("lol1: ", req.body);
+    if(conditions[index] in req.body) {
       if(query.indexOf("=") > 0)
         query += `,`;
-
-      query += ` ${conditions[index]} = '${req.query[conditions[index]]}'`;
+        console.log("lol2");
+      query += ` ${conditions[index]} = '${req.body[conditions[index]]}'`;
+      ++field;
     }
   }
 
   query += ` WHERE id=${id};`;
 
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
+  if(field < 1)
+    res.status(400).send(JSON.stringify("Bad Request"));
 
-    res.send(JSON.stringify(result)).status(200);
-  });
+  else if(!checkEmailFormat(req.body["email"]))
+    res.status(400).send(JSON.stringify("Bad Request3"));
+
+  else {
+    executeQuery(query).then(
+      result => {
+        executeQuery(`SELECT * FROM users WHERE id = ${id}`).then(
+          result => res.status(200).send(JSON.stringify(usersView(result)[0])),
+          error => res.status(404).send(JSON.stringify("Note found"))
+        );
+      },
+      error => res.status(400).send(JSON.stringify("Bad Request"))
+    );
+  }
 });
 
-app.delete(prefix+'/users/:id', async function(req, res) {
+app.delete(prefix+'/users/:id', requireSelf(), function(req, res) {
   let id = req.params.id;
   let query = `DELETE FROM users WHERE id=${id}`;
 
@@ -455,12 +528,6 @@ app.delete(prefix+'/cards/:id', async function(req, res) {
 });
 
 /* =============== wallets =============== */
-
-function redirectUser(originalUrl) {
-  if(originalUrl.localeCompare(prefix+'/wallets')){
-
-  }
-}
 
 const walletsAdmin = () => {
   return (req, res, next) => {
