@@ -219,6 +219,19 @@ function payView(result) {
   return response;
 }
 
+function transfersView(result) {
+  let response = [];
+
+  for(let index in result) {
+    response.push({
+        "id" : result[index].id,
+        "wallet_id": result[index].credited_wallet_id,
+        "amount" : result[index].amount
+    });
+  }
+  return response;
+}
+
 /* =============== auth =============== */
 
 app.post(prefix+'/login', function(req, res) {
@@ -280,7 +293,7 @@ function createToken(email) {
 }
 
 function decodeJWT(token) {
-  return new Promise(function(resolve) {
+  return new Promise(function(resolve, reject) {
     try {
       let secretKey = fs.readFileSync('secret.key')
       let decoded = jwt.verify(token, secretKey);
@@ -296,7 +309,7 @@ function decodeJWT(token) {
           reject(401);
       });
     } catch (e) {
-      res.status(401).send("ACCESS DENIED");
+      reject(401);
     }
   });
 }
@@ -307,6 +320,7 @@ app.use(function(req, res, next) {
     decodeJWT(token)
       .then(
         result => {
+          console.log("middle: ", result);
           req.headers["x-auth-token"] = result[0].api_key;
           next();
         },
@@ -787,17 +801,33 @@ app.get(prefix+'/transfers', function(req, res) {
 });
 
 app.post(prefix+'/transfers', async function(req, res) {
-  let debited_wallet_id = await getId(res, "wallets", req.body.debited_wallet_id);
-  let credited_wallet_id = await getId(res, "wallets", req.body.credited_wallet_id);
-  let amount = req.body.amount * 100;
-  let query = `INSERT INTO transfers (debited_wallet_id, credited_wallet_id, amount) VALUES ('${debited_wallet_id}', '${credited_wallet_id}', '${amount}')`;
+  let access_token = req.headers["x-auth-token"];
+  let debited_wallet_id = req.body.debited_wallet_id;
+  let credited_wallet_id = req.body.credited_wallet_id;
+  let amount = req.body.amount;
 
-  db.query(query, function(err, result, fields) {
-    if(err)
-      res.status(500).send(JSON.stringify(err));
-
-    res.send(JSON.stringify("SUCCESS: " + amount/100 + " transfered from " + debited_wallet_id + " to " + credited_wallet_id)).status(200);
-  })
+  if(amount/100 < 1)
+    res.status(400).send(JSON.stringify("Bad Request"))
+    else {
+  executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
+    .then(infoUser => {
+      executeQuery(`SELECT * FROM wallets WHERE user_id = ${infoUser[0].id}`)
+        .then(infoWallets => {
+          executeQuery(`INSERT INTO transfers (debited_wallet_id, credited_wallet_id, amount) VALUES (${infoWallets[0].id}, ${credited_wallet_id}, ${amount})`)
+          .then(
+            result => {
+              executeQuery(`SELECT * FROM transfers WHERE id = ${result.insertId}`)
+              .then(
+                result => res.status(200).send(JSON.stringify(transfersView(result)[0])),
+                error => res.status(500).send(JSON.stringify("Internal Server Error"))
+              );
+            },
+            error => res.status(400).send(JSON.stringify("Bad Request")));
+        },
+        error => res.status(500).send(JSON.stringify("Internal Server Error")));
+    },
+  error => res.status(500).send(JSON.stringify("Internal Server Error")));
+}
 });
 
 /* =============== errors =============== */
