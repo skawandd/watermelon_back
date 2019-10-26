@@ -135,9 +135,8 @@ function makeid(length) {
    var result           = '';
    var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
    var charactersLength = characters.length;
-   for ( var i = 0; i < length; i++ ) {
+   for ( var i = 0; i < length; i++ )
       result += characters.charAt(Math.floor(Math.random() * charactersLength));
-   }
    return result;
 }
 
@@ -419,16 +418,51 @@ app.delete(prefix+'/users/:id', requireSelf(), function(req, res) {
   let id = req.params.id;
   let query = `DELETE FROM users WHERE id=${id}`;
 
-  executeQuery(query).then(
-    result => {
-      if(result.affectedRows == 0)
-        res.status(404).send(JSON.stringify("Not Found"))
+  /*
+  executeDelete(query).then(
+    result => res.status(204).send(JSON.stringify("No Content")),
+    error => {
+      if(error == 400)
+        res.status(400).send(JSON.stringify("Bad Request"))
       else
-        res.status(204).send("No Content")
+        res.status(404).send(JSON.stringify("Not Found"))
+    });
+    */
+
+    executeDelete(`DELETE FROM cards WHERE user_id=${id}`).then(
+    result => {
+      executeDelete(`DELETE FROM wallets WHERE user_id=${id}`).then(
+        result => {
+          executeDelete(`DELETE FROM users WHERE id=${id}`).then(
+            result => res.status(204).send(JSON.stringify("No Content")),
+            error => res.sendStatus(error));
+        },
+        error => error => res.sendStatus(error));
     },
-    error => res.status(400).send(JSON.stringify("Bad Request"))
-  );
+    error => error => res.sendStatus(error));
+
 });
+
+function executeDelete(query){
+  return new Promise(function(resolve) {
+    let query_type = query.substring(0, 6);
+
+    if(query_type.localeCompare("DELETE") != 0)
+      resolve(400);//res.status(400).send(JSON.stringify("Bad Request"))
+
+    else {
+      executeQuery(query).then(
+      result => {
+        if(result.affectedRows == 0)
+          resolve(404);//res.status(404).send(JSON.stringify("Not Found"))
+        else
+          resolve(204);//res.status(204).send("No Content")
+      },
+      error => resolve(400)//res.status(400).send(JSON.stringify("Bad Request"))
+      );
+    }
+  });
+}
 
 /* =============== cards =============== */
 
@@ -479,7 +513,7 @@ app.post(prefix+'/cards', function(req, res) {
   );
 });
 
-app.put(prefix+'/cards/:id', async function(req, res) {
+app.put(prefix+'/cards/:id', function(req, res) {
   let id = req.params.id;
   let query = "UPDATE cards SET";
   let conditions = ["user_id", "last_4", "brand", "expired_at"];
@@ -511,9 +545,8 @@ app.put(prefix+'/cards/:id', async function(req, res) {
 
 });
 
-app.delete(prefix+'/cards/:id', async function(req, res) {
+app.delete(prefix+'/cards/:id', function(req, res) {
   let id = req.params.id;
-  let username = req.body.username;
   let query = `DELETE FROM cards WHERE id=${id}`;
 
   executeQuery(query).then(
@@ -597,24 +630,6 @@ function sumAmount(query) {
         balance += result[index].amount;
 
       resolve(balance);
-    });
-  });
-}
-
-function getId(res, table_name, id_value) {
-  let query = `SELECT * FROM ${table_name} WHERE id=${id_value}`;
-  return new Promise(resolve => {
-    db.query(query, function(err, result, fields) {
-      if(err)
-        res.status(500).send(JSON.stringify(err));
-
-      else if(result.length == 0)
-        res.send(JSON.stringify("ERROR: id not found")).status(404);
-
-      else {
-        let id = result[0].id;
-        resolve(id);
-      }
     });
   });
 }
@@ -791,7 +806,7 @@ app.get(prefix+'/transfers/:id', function(req, res) {
   );
 });
 
-app.post(prefix+'/transfers', async function(req, res) {
+app.post(prefix+'/transfers', function(req, res) {
   let access_token = req.headers["x-auth-token"];
   let credited_wallet_id = req.body.credited_wallet_id;
   let amount = req.body.amount;
