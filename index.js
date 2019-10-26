@@ -6,7 +6,7 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const app = express();
 
-const  port = process.env.PORT || 8000,
+const port = process.env.PORT || 8000,
   prefix = '/v1';
 
 /**
@@ -69,17 +69,13 @@ app.post(prefix + '/users', async function(req, res) {
                               "access_token": userInfo[0].api_key
                             }));
                           },
-                          error => res.status(400).send(JSON.stringify("Bad Request"))
-                        );
+                          error => res.status(400).send(JSON.stringify("Bad Request")));
                     },
-                    error => res.status(400).send(JSON.stringify("Bad Request"))
-                  );
+                    error => res.status(400).send(JSON.stringify("Bad Request")));
               },
-              error => res.status(400).send(JSON.stringify("Bad Request"))
-            );
+              error => res.status(400).send(JSON.stringify("Bad Request")));
         },
-        error => res.status(400).send(JSON.stringify("Bad Request"))
-      );
+        error => res.status(400).send(JSON.stringify("Bad Request")));
   }
 });
 
