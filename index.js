@@ -38,36 +38,41 @@ app.post(prefix + '/users', async function(req, res) {
   let email = req.body.email;
   let last_name = req.body.last_name;
   let first_name = req.body.first_name;
-  let password = req.body.password !== undefined ? await bcrypt.hash(req.body.password, 10) : res.status(400).send(JSON.stringify("Bad Request"));
+  let password = req.body.password;
   let is_admin = req.body.is_admin;
   let access_token = makeid(64);
-  let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
 
   if (email === undefined || last_name === undefined || first_name === undefined || password === undefined || is_admin === undefined)
     res.status(400).send(JSON.stringify("Bad Request"));
 
   else {
-    checkEmail(email)
+    bcrypt.hash(req.body.password, 10)
       .then(
-        result => {
-          executeQuery(query)
+        hash => {
+          checkEmail(email)
             .then(
-              function(result) {
-                executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`)
+              result => {
+                executeQuery(`INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${hash}', ${is_admin}, '${access_token}')`)
                   .then(
-                    userInfo => {
-                      executeQuery(`INSERT INTO wallets (user_id) VALUES (${userInfo[0].id})`)
+                    function(result) {
+                      executeQuery(`SELECT * FROM users WHERE id=${result.insertId}`)
                         .then(
-                          result_wallet => {
-                            userInfo[0].api_key = createToken(email);
-                            res.status(200).send(JSON.stringify({
-                              "id": userInfo[0].id,
-                              "email": userInfo[0].email,
-                              "first_name": userInfo[0].first_name,
-                              "last_name": userInfo[0].last_name,
-                              "is_admin": (userInfo[0].is_admin === 1),
-                              "access_token": userInfo[0].api_key
-                            }));
+                          userInfo => {
+                            executeQuery(`INSERT INTO wallets (user_id) VALUES (${userInfo[0].id})`)
+                              .then(
+                                result_wallet => {
+                                  userInfo[0].api_key = createToken(email);
+                                  res.status(200).send(JSON.stringify({
+                                    "id": userInfo[0].id,
+                                    "email": userInfo[0].email,
+                                    "first_name": userInfo[0].first_name,
+                                    "last_name": userInfo[0].last_name,
+                                    "is_admin": (userInfo[0].is_admin === 1),
+                                    "access_token": userInfo[0].api_key
+                                  }));
+                                },
+                                error => res.status(400).send(JSON.stringify("Bad Request"))
+                              );
                           },
                           error => res.status(400).send(JSON.stringify("Bad Request")));
                     },
