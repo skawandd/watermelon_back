@@ -3,14 +3,13 @@ const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-const cookieParser = require('cookie-parser');
+const bcrypt = require('bcrypt');
 const app = express();
 var debug = true, cpt = 0;
 
 const port = process.env.PORT || 8000, prefix = '/v1';
 
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser('secret'));
 
 if(debug==true){
     app.use ((req,res,next) => {
@@ -41,11 +40,11 @@ app.get(prefix+'/', function(req, res) {
     res.send(JSON.stringify(response)).status(200);
 });
 
-app.post(prefix+'/users', function(req,res){
+app.post(prefix+'/users', async function(req,res){
     let email = req.body.email;
     let last_name = req.body.last_name;
     let first_name = req.body.first_name;
-    let password = req.body.password;
+    let password = req.body.password!==undefined ? await bcrypt.hash(req.body.password, 10) : res.sendStatus(400);//req.body.password;
     let is_admin = req.body.is_admin;
     let access_token = makeid(64);
     let query = `INSERT INTO users (first_name, last_name, email, password, is_admin, api_key) VALUES ('${first_name}', '${last_name}', '${email}', '${password}', ${is_admin}, '${access_token}')`;
@@ -87,7 +86,6 @@ app.post(prefix+'/users', function(req,res){
     );
   }
 });
-
 
 function executeQuery(query) {
   console.log(query);
@@ -251,7 +249,7 @@ app.post(prefix+'/login', function(req, res) {
   let access_token = req.headers["x-auth-token"];
   let email = req.body.email;
   let password = req.body.password;
-  let query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
+  let query = `SELECT * FROM users WHERE email = '${email}'`;//AND password = '${password}'`;
 
   if(access_token !== undefined) {
     executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`).then(
@@ -264,9 +262,14 @@ app.post(prefix+'/login', function(req, res) {
     );
   } else if(email !== undefined && password !== undefined) {
     executeQuery(query).then(
-      result =>  {
-        let token = createToken(email);
-        res.status(200).send(JSON.stringify({"access_token": token}))
+      async result =>  {
+        let match = await bcrypt.compare(password, result[0].password);
+
+        if(!match)
+          res.status(401).send("ACCESS DENIED");
+
+        else
+          res.status(200).send(JSON.stringify({"access_token": createToken(email)}))
       },
       error => res.status(401).send("ACCESS DENIED")
     );
@@ -375,12 +378,15 @@ const requireSelf = () => {
   }
 }
 
-app.put(prefix+'/users/:id', requireSelf(), function(req, res) {
+app.put(prefix+'/users/:id', requireSelf(), async function(req, res) {
   let id = req.params.id;
   let access_token = req.headers["x-auth-token"];
   let query = `UPDATE users SET`;
   let conditions = [`first_name`, `last_name`, `email`, `password`, `is_admin`];
   let field = 0;
+
+  if(req.body[`password`] !== undefined)
+    req.body.password = await bcrypt.hash(req.body.password, 10);
 
   for(let index in conditions) {
     console.log("lol1: ", req.body);
