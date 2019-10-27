@@ -93,7 +93,7 @@ app.post(prefix + '/login', function(req, res) {
   let password = req.body.password;
   let query = `SELECT * FROM users WHERE email = '${email}'`;
 
-  if (access_token !== undefined) {
+  if (access_token !== undefined && access_token.length <= 64) {
     executeQuery(`SELECT * FROM users WHERE api_key = '${access_token}'`)
       .then(
         result => {
@@ -101,10 +101,24 @@ app.post(prefix + '/login', function(req, res) {
             "access_token": access_token
           }))
         },
-        error => {
-          res.status(401).send("Unauthorized");
-        }
-      );
+        error => res.status(401).send("Unauthorized"));
+  } else if (access_token !== undefined && access_token.length > 64) {
+    decodeJWT(access_token)
+      .then(
+        result => {
+          executeQuery(`SELECT * FROM users WHERE email = '${result[0].email}'`)
+            .then(
+              result => {
+                res.status(200).send(JSON.stringify({
+                  "access_token": result[0].api_key
+                }))
+              },
+              error => {
+                res.status(401).send("Unauthorized");
+              }
+            );
+        },
+        error => res.status(401).send("Unauthorized"));
   } else if (email !== undefined && password !== undefined) {
     executeQuery(query)
       .then(
@@ -125,37 +139,6 @@ app.post(prefix + '/login', function(req, res) {
     res.status(400).send("Bad Request");
   }
 });
-
-function createToken(email) {
-  let secretKey = fs.readFileSync('secret.key');
-  let token = jwt.sign({
-    email: email
-  }, secretKey);
-
-  return token;
-}
-
-function decodeJWT(token) {
-  return new Promise(function(resolve, reject) {
-    try {
-      let secretKey = fs.readFileSync('secret.key')
-      let decoded = jwt.verify(token, secretKey);
-      let query = `SELECT * FROM users WHERE email='${decoded.email}'`;
-
-      db.query(query, function(err, result, fields) {
-        if (err)
-          reject(500);
-
-        if (result.length > 0)
-          resolve(result);
-        else
-          reject(401);
-      });
-    } catch (e) {
-      reject(401);
-    }
-  });
-}
 
 app.use(function(req, res, next) {
   let token = req.headers["x-auth-token"];
@@ -214,7 +197,7 @@ app.get(prefix + '/users', function(req, res) {
               error => res.sendStatus(error));
         }
       },
-      error => res.status(401).send(JSON.stringify("ACCESS DENIED2"))
+      error => res.status(401).send(JSON.stringify("Unauthorized"))
     );
 });
 
@@ -866,4 +849,35 @@ function transfersView(result) {
     });
   }
   return response;
+}
+
+function createToken(email) {
+  let secretKey = fs.readFileSync('secret.key');
+  let token = jwt.sign({
+    email: email
+  }, secretKey);
+
+  return token;
+}
+
+function decodeJWT(token) {
+  return new Promise(function(resolve, reject) {
+    try {
+      let secretKey = fs.readFileSync('secret.key')
+      let decoded = jwt.verify(token, secretKey);
+      let query = `SELECT * FROM users WHERE email='${decoded.email}'`;
+
+      db.query(query, function(err, result, fields) {
+        if (err)
+          reject(500);
+
+        if (result.length > 0)
+          resolve(result);
+        else
+          reject(401);
+      });
+    } catch (e) {
+      reject(401);
+    }
+  });
 }
